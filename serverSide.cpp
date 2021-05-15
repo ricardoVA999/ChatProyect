@@ -18,8 +18,6 @@
 #include <unordered_map>
 #include "payload.pb.h"
 
-#define BUFFER_SIZE 8192
-
 // Estructura del cliente
 struct ChatClient
 {
@@ -54,7 +52,7 @@ void *ThreadWork(void *params)
     struct ChatClient thisClient;
     struct ChatClient *newClientParams = (struct ChatClient *)params;
     int socketFd = newClientParams->socketFd;
-    char buffer[BUFFER_SIZE];
+    char buffer[8192];
 
     // Estructura de los mensajes
     std::string msgSerialized;
@@ -64,9 +62,9 @@ void *ThreadWork(void *params)
     while (1)
     {
         // Si no se recive response del cliente este cerro sesion
-        if (recv(socketFd, buffer, BUFFER_SIZE, 0) < 1)
+        if (recv(socketFd, buffer, 8192, 0) < 1)
         {
-            if (recv(socketFd, buffer, BUFFER_SIZE, 0) == 0)
+            if (recv(socketFd, buffer, 8192, 0) == 0)
             {
                 // cliente cerro conexion
                 std::cout << "Servidor: el cliente "

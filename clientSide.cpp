@@ -20,11 +20,10 @@
 #include <queue>
 
 int connected, waitingForServerResponse, waitingForInput;
-std::queue<std::string> msgQueue;
 std::string statusArray[3] = {"ACTIVO", "OCUPADO", "INACTIVO"};
 
 
-// get sockaddr, IPv4 or IPv6:
+// get sockaddr
 void *get_in_addr(struct sockaddr *sa)
 {
 	if (sa->sa_family == AF_INET)
@@ -35,20 +34,21 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
+// Funcion de threads, su objetivo es siempre estar escuchando respuestas del servidor
 void *listenToMessages(void *args)
 {
 	while (1)
 	{
+		// Estructura del mensaje
 		char bufferMsg[8192];
 		int *sockmsg = (int *)args;
 		chat::Payload serverMsg;
 
-		// recibir response de servidor
 		int bytesReceived = recv(*sockmsg, bufferMsg, 8192, 0);
 
-		// Parsear mensaje de servidor
 		serverMsg.ParseFromString(bufferMsg);
 
+		// Mensaje con codigo de error
 		if (serverMsg.code() == 500)
 		{
 			printf("________________________________________________________\n");
@@ -56,6 +56,7 @@ void *listenToMessages(void *args)
 			  << serverMsg.message()
 			  << std::endl;
 		}
+		// Respuesta correcta del servidor
 		else if (serverMsg.code() == 200)
 		{
 			printf("________________________________________________________\n");
@@ -63,20 +64,13 @@ void *listenToMessages(void *args)
 			  << serverMsg.message()
 			  << std::endl;
 		}
+		// En el posible caso que el servidor mande una respuesta no reconocida
 		else
 		{
-			// error: respuesta no reconocida
 			printf("El servidor no esta disponible, intentelo mas tarde\n");
 			break;
 		}
 
-		while (!waitingForInput && !msgQueue.empty())
-		{
-			printf("%s\n", msgQueue.front().c_str());
-			msgQueue.pop();
-		}
-
-		// notificar a main thread que ya puede seguir
 		waitingForServerResponse = 0;
 
 		if (connected == 0)
@@ -86,6 +80,7 @@ void *listenToMessages(void *args)
 	}
 }
 
+// Menu de opciones
 void print_menu(char *usrname)
 {
 	printf("________________________________________________________ \n");
@@ -100,6 +95,7 @@ void print_menu(char *usrname)
 	printf("________________________________________________________ \n");
 }
 
+// Menu de ayuda
 void help_menu() {
 	printf("________________________________________________________ \n");
 	printf("AYUDA \n");
@@ -113,6 +109,7 @@ void help_menu() {
 	printf("________________________________________________________ \n");
 }
 
+// Obtener opcion elegida por el cliente
 int get_client_option()
 {
 	// Client options
@@ -132,16 +129,16 @@ int get_client_option()
 
 int main(int argc, char *argv[])
 {
+	// Estructura de la coneccion
 	int sockfd, numbytes;
 	char buf[8192];
 	struct addrinfo hints, *servinfo, *p;
 	int rv;
 	char s[INET6_ADDRSTRLEN];
-	char *usrname;
 
 	if (argc != 4)
 	{
-		fprintf(stderr, "usage: client <username> <server_ip> <server_port>\n");
+		fprintf(stderr, "Forma de uso: client <username> <server_ip> <server_port>\n");
 		exit(1);
 	}
 
@@ -155,7 +152,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	// loop through all the results and connect to the first we can
+	// Conectarse a la opcion que este disponible
 	for (p = servinfo; p != NULL; p = p->ai_next)
 	{
 		if ((sockfd = socket(p->ai_family, p->ai_socktype,
@@ -174,19 +171,21 @@ int main(int argc, char *argv[])
 
 		break;
 	}
-
+	// Indicar fallo al conectarse
 	if (p == NULL)
 	{
-		fprintf(stderr, "client: failed to connect\n");
+		fprintf(stderr, "failed to connect\n");
 		return 2;
 	}
 
+	//Completar la coneccion
 	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
 			  s, sizeof s);
-	printf("Cliente: conectado con %s\n", s);
-	freeaddrinfo(servinfo); // all done with this structure
+	printf("Conectado con %s\n", s);
+	freeaddrinfo(servinfo);
 
-	// escribir mensaje
+
+	// Escribir el mensaje de registro
 	char buffer[8192];
 	std::string message_serialized;
 
@@ -194,19 +193,20 @@ int main(int argc, char *argv[])
 
 	firstMessage->set_sender(argv[1]);
 	firstMessage->set_flag(chat::Payload_PayloadFlag_register_);
-	firstMessage->set_ip("nose");
+	firstMessage->set_ip(s);
 
 	firstMessage->SerializeToString(&message_serialized);
 
 	strcpy(buffer, message_serialized.c_str());
 	send(sockfd, buffer, message_serialized.size() + 1, 0);
 
-	// recibir response de servidor
+	// Obtener response de servidor
 	recv(sockfd, buffer, 8192, 0);
 
 	chat::Payload serverMessage;
 	serverMessage.ParseFromString(buffer);
 
+	// En caso de registro no exitoso
 	if(serverMessage.code() == 500){
 			std::cout << "Error: "
 			  << serverMessage.message()
@@ -214,12 +214,12 @@ int main(int argc, char *argv[])
 			return 0;
 	}
 
+	// En caso de registro exitoso
 	std::cout << "El servidor dice: "
 			  << serverMessage.message()
 			  << std::endl;	
 
 	connected = 1;
-	usrname = argv[1];
 
 	// despachar thread que escucha mensajes del server
 	pthread_t thread_id;
@@ -227,39 +227,38 @@ int main(int argc, char *argv[])
 	pthread_attr_init(&attrs);
 	pthread_create(&thread_id, &attrs, listenToMessages, (void *)&sockfd);
 
-	print_menu(usrname);
+	print_menu(argv[1]);
 	int client_opt;
 
+	// Loop para seguir preguntando opciones 
 	while (true)
 	{
+		// Mantener un orden entre lo que se envia y se recibe
 		while (waitingForServerResponse == 1){}
 
-		printf("\nEscoja una opcion a realizar (AYUDA = 6):\n");
+		printf("\nEscoja la opcion que desea:\n");
 		client_opt = get_client_option();
 
 		std::string msgSerialized;
 		int bytesReceived, bytesSent;
 
-		// List
+		// Lista de usuarios conectados
 		if (client_opt == 1)
 		{
-			/* ENVIAR SOLICITUD A SERVIDOR */
 			chat::Payload *userList = new chat::Payload();
 			userList->set_sender(argv[1]);
-			userList->set_ip("nose");
+			userList->set_ip(s);
 			userList->set_flag(chat::Payload_PayloadFlag_user_list);
 
 			userList->SerializeToString(&msgSerialized);
 
-			// enviar por socket
 			strcpy(buffer, msgSerialized.c_str());
 			bytesSent = send(sockfd, buffer, msgSerialized.size() + 1, 0);
 			waitingForServerResponse = 1;
 		}
-		// User info
+		// Informacion de un usuario en especifico
 		else if (client_opt == 2)
 		{
-			/* ENVIAR SOLICITUD A SERVIDOR */
 			std::string user_name;
 			printf("Ingrese el nombre del usuario que quiere consultar: \n");
 			std::cin >> user_name;
@@ -268,18 +267,16 @@ int main(int argc, char *argv[])
 			userInf->set_sender(argv[1]);
 			userInf->set_flag(chat::Payload_PayloadFlag_user_info);
 			userInf->set_extra(user_name);
-			userInf->set_ip("nose");
+			userInf->set_ip(s);
 
 			userInf->SerializeToString(&msgSerialized);
 
-			// enviar por socket
 			strcpy(buffer, msgSerialized.c_str());
 			bytesSent = send(sockfd, buffer, msgSerialized.size() + 1, 0);
 			waitingForServerResponse = 1;
 		}
-		// Change status
+		// Cambiar estatus
 		else if(client_opt == 3){
-			// Preguntar por nuevo status
 			printf("Ingrese su nuevo estado: \n");
 			printf("1. ACTIVO\n");
 			printf("2. OCUPADO\n");
@@ -299,14 +296,15 @@ int main(int argc, char *argv[])
 			userInf->set_sender(argv[1]);
 			userInf->set_flag(chat::Payload_PayloadFlag_update_status);
 			userInf->set_extra(newStatus);
-			userInf->set_ip("nose");
+			userInf->set_ip(s);
 
 			userInf->SerializeToString(&msgSerialized);
-			// enviar por socket
+
 			strcpy(buffer, msgSerialized.c_str());
 			bytesSent = send(sockfd, buffer, msgSerialized.size() + 1, 0);
 			waitingForServerResponse = 1;
 		}
+		// Enviar mensaje general
 		else if (client_opt == 4)
 		{
 			waitingForInput = 1;
@@ -315,21 +313,22 @@ int main(int argc, char *argv[])
 			std::string msg;
 			std::getline(std::cin, msg);
 
-			/* ENVIAR SOLICITUD A SERVIDOR */
+
 			chat::Payload *clientMsg= new chat::Payload();
-			// Se envia opcion 4: BroadcastRequest
+
 			clientMsg->set_sender(argv[1]);
 			clientMsg->set_message(msg);
 			clientMsg->set_flag(chat::Payload_PayloadFlag_general_chat);
-			clientMsg->set_ip("nose");
+			clientMsg->set_ip(s);
 			clientMsg->SerializeToString(&msgSerialized);
 
-			// enviar por socket
 			strcpy(buffer, msgSerialized.c_str());
 			bytesSent = send(sockfd, buffer, msgSerialized.size() + 1, 0);
 			waitingForServerResponse = 1;
 			waitingForInput = 0;
 		}
+
+		// Enviar Mensaje privado
 		else if (client_opt == 5)
 		{
 			printf("Ingrese el nombre de usuario al que quiere enviarle un mensaje: \n");
@@ -341,17 +340,15 @@ int main(int argc, char *argv[])
 			std::string msg;
 			std::getline(std::cin, msg);
 
-			/* ENVIAR SOLICITUD A SERVIDOR */
 			chat::Payload *clientMsg= new chat::Payload();
 
 			clientMsg->set_sender(argv[1]);
 			clientMsg->set_message(msg);
 			clientMsg->set_flag(chat::Payload_PayloadFlag_private_chat);
 			clientMsg->set_extra(user_name);
-			clientMsg->set_ip("nose");
+			clientMsg->set_ip(s);
 			clientMsg->SerializeToString(&msgSerialized);
 
-			// enviar por socket
 			strcpy(buffer, msgSerialized.c_str());
 			bytesSent = send(sockfd, buffer, msgSerialized.size() + 1, 0);
 			waitingForServerResponse = 1;
