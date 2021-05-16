@@ -100,6 +100,7 @@ void *ThreadWork(void *params)
 
             messageSend->set_sender("server");
             messageSend->set_message("Registro exitoso");
+            messageSend->set_flag(chat::Payload_PayloadFlag_register_);
             messageSend->set_code(200);
 
             messageSend->SerializeToString(&msgSerialized);
@@ -140,6 +141,7 @@ void *ThreadWork(void *params)
             messageSend->set_sender("server");
             messageSend->set_message(list_to_sent);
             messageSend->set_code(200);
+            messageSend->set_flag(chat::Payload_PayloadFlag_user_list);
 
             messageSend->SerializeToString(&msgSerialized);
             strcpy(buffer, msgSerialized.c_str());
@@ -164,6 +166,7 @@ void *ThreadWork(void *params)
                 messageSend->set_sender("Server");
                 messageSend->set_message(mssToSend);
                 messageSend->set_code(200);
+                messageSend->set_flag(chat::Payload_PayloadFlag_user_info);
 
                 messageSend->SerializeToString(&msgSerialized);
                 strcpy(buffer, msgSerialized.c_str());
@@ -192,6 +195,7 @@ void *ThreadWork(void *params)
             messageSend->set_sender("Server");
             messageSend->set_message("Se ha actualizado el status correctamente a " + messageReceived.extra());
             messageSend->set_code(200);
+            messageSend->set_flag(chat::Payload_PayloadFlag_update_status);
 
             messageSend->SerializeToString(&msgSerialized);
             strcpy(buffer, msgSerialized.c_str());
@@ -220,6 +224,7 @@ void *ThreadWork(void *params)
             genMessage->set_sender("Server");
             genMessage->set_message("Mensaje general de "+messageReceived.sender()+": "+messageReceived.message()+"\n");
             genMessage->set_code(200);
+            genMessage->set_flag(chat::Payload_PayloadFlag_general_chat);
 
             genMessage->SerializeToString(&msgSerialized);
             strcpy(buffer, msgSerialized.c_str());
@@ -263,6 +268,7 @@ void *ThreadWork(void *params)
             privMessage->set_sender(thisClient.username);
             privMessage->set_message("Mensaje privado de "+messageReceived.sender()+": "+messageReceived.message()+"\n");
             privMessage->set_code(200);
+            privMessage->set_flag(chat::Payload_PayloadFlag_private_chat);
 
             privMessage->SerializeToString(&msgSerialized);
             int destSocket = clients[messageReceived.extra()]->socketFd;

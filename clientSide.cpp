@@ -57,7 +57,7 @@ void *listenToMessages(void *args)
 			  << std::endl;
 		}
 		// Respuesta correcta del servidor
-		else if (serverMsg.code() == 200)
+		else if (serverMsg.code() == 200 || serverMsg.flag() == chat::Payload_PayloadFlag_general_chat)
 		{
 			printf("________________________________________________________\n");
 			std::cout << "Respuesta del servidor: \n"
@@ -324,7 +324,7 @@ int main(int argc, char *argv[])
 
 			strcpy(buffer, msgSerialized.c_str());
 			bytesSent = send(sockfd, buffer, msgSerialized.size() + 1, 0);
-			waitingForServerResponse = 1;
+			waitingForServerResponse = 0;
 			waitingForInput = 0;
 		}
 
@@ -351,7 +351,7 @@ int main(int argc, char *argv[])
 
 			strcpy(buffer, msgSerialized.c_str());
 			bytesSent = send(sockfd, buffer, msgSerialized.size() + 1, 0);
-			waitingForServerResponse = 1;
+			waitingForServerResponse = 0;
 		}
 		else if (client_opt == 6)
 		{
